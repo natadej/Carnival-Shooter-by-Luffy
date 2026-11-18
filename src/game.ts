@@ -100,6 +100,7 @@ export class Game {
   private dpr = 1;
   private bg: HTMLCanvasElement | null = null;
   private rows: Row[] = [];
+  private lastW = 0;
   private targets: Target[] = [];
   private peekers: Target[] = [];
   private queue: RuntimeChar[] = [];
@@ -175,13 +176,16 @@ export class Game {
     const top = this.H * 0.2;
     const span = this.counterTop() - top;
     const prev = this.rows;
-    this.rows = [0.78, 0.89, 1].map((scale, i) => ({
-      y: top + span * [0.36, 0.67, 0.97][i],
-      scale,
-      dir: prev[i]?.dir ?? (i % 2 ? -1 : 1),
-      speed: 0,
-      belt: prev[i]?.belt ?? 0,
-    }));
+    const oldW = prev.length ? this.lastW : this.W;
+    this.rows = [0.78, 0.89, 1].map((scale, i) => {
+      const y = top + span * [0.36, 0.67, 0.97][i];
+      const r = prev[i];
+      // keep row objects stable: targets hold references to their row
+      if (r) return Object.assign(r, { y, scale });
+      return { y, scale, dir: i % 2 ? -1 : 1, speed: 0, belt: 0 };
+    });
+    if (oldW !== this.W) for (const t of this.targets) t.x *= this.W / oldW;
+    this.lastW = this.W;
     this.setSpeeds();
     this.bg = this.paintBackground();
     if (!this.aim.x) this.aim = { x: this.W / 2, y: this.H / 2 };
@@ -526,6 +530,13 @@ export class Game {
     if (t.anim === 'run' || t.anim === 'chicken') pose.flip = dir < 0;
     if (t.anim === 'moonwalk') pose.flip = dir > 0;
     drawPuppet(g, t.ch, pose, t.mode === 'down' ? undefined : t.caps);
+    // caps come out in backing-store pixels; game logic works in CSS pixels
+    const d = this.dpr;
+    for (const c of t.caps) {
+      c.a = { x: c.a.x / d, y: c.a.y / d };
+      c.b = { x: c.b.x / d, y: c.b.y / d };
+      c.r /= d;
+    }
     g.restore();
     if (t.mode === 'down' && t.modeT < 1.6) this.drawDizzy(t.x, baseY - k * 1.2, k);
   }

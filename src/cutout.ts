@@ -1,4 +1,4 @@
-import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
+import type { FaceLandmarker, NormalizedLandmark } from '@mediapipe/tasks-vision';
 import { randomColors, type CharacterData, type HeadImg, type LimbKey, type PartImg, type TorsoImg } from './character';
 import { photoFaces, photoPoses, SEG, segment, type CategoryMask } from './vision';
 import { canvas, clamp, ctx2d, dist, rgbToHex, segDist, uid, type Pt } from './util';
@@ -393,7 +393,13 @@ async function extractBody(src: HTMLCanvasElement, P: PosePt[], g: FaceGeom): Pr
   const [Lc, Rc] = P[11].x <= P[12].x ? [LEFT_CHAIN, RIGHT_CHAIN] : [RIGHT_CHAIN, LEFT_CHAIN];
   const shW = dist(P[11], P[12]);
   if (shW < 20) return null;
-  const armOk = (c: number[]) => V(c[0]) && V(c[1]) && V(c[2]);
+  // arms folded across the chest stay part of the torso image (cartoon sleeves are drawn instead)
+  const shY = Math.max(P[11].y, P[12].y);
+  const hipY = Math.min(P[23].y, P[24].y);
+  const tx0 = Math.min(P[11].x, P[12].x) + shW * 0.12;
+  const tx1 = Math.max(P[11].x, P[12].x) - shW * 0.12;
+  const onChest = (p: Pt) => p.x > tx0 && p.x < tx1 && p.y > shY + shW * 0.15 && p.y < hipY + shW * 0.25;
+  const armOk = (c: number[]) => V(c[0]) && V(c[1]) && V(c[2]) && !onChest(P[c[2]]) && !onChest(mid(P[c[1]], P[c[2]]));
   const legOk = (c: number[]) => V(c[3]) && V(c[4]) && V(c[5]);
 
   const used = [11, 12, 23, 24];
@@ -539,13 +545,52 @@ export async function buildCharacter(src: HTMLCanvasElement, g: FaceGeom, pose: 
   };
 }
 
+/**
+ * The face model only sees faces that fill a decent part of the frame, so group photos are
+ * also scanned in overlapping zoomed tiles; duplicates are merged keeping the larger detection.
+ */
+function detectTiled(fl: FaceLandmarker, src: HTMLCanvasElement): FaceGeom[] {
+  const W = src.width;
+  const H = src.height;
+  const found: FaceGeom[] = [];
+  const add = (g: FaceGeom) => {
+    const dup = found.findIndex((f) => dist(f.c, g.c) < Math.max(f.w, g.w) * 0.6);
+    if (dup < 0) found.push(g);
+    else if (g.w > found[dup].w * 1.15) found[dup] = g;
+  };
+  const run = (sx: number, sy: number, sw: number, sh: number) => {
+    const k = Math.min(1.6, 768 / Math.max(sw, sh));
+    const c = canvas(Math.round(sw * k), Math.round(sh * k));
+    ctx2d(c).drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    for (const lm of fl.detect(c).faceLandmarks) {
+      const g = faceGeom(lm.map((p) => ({ x: sx + (p.x * c.width) / k, y: sy + (p.y * c.height) / k })));
+      // ignore faces cut by the tile edge; another tile sees them whole
+      const edge = g.w * 0.3;
+      const inner =
+        (sx <= 0 || g.c.x - g.w / 2 > sx + edge) &&
+        (sy <= 0 || g.c.y - g.h / 2 > sy + edge) &&
+        (sx + sw >= W || g.c.x + g.w / 2 < sx + sw - edge) &&
+        (sy + sh >= H || g.c.y + g.h / 2 < sy + sh - edge);
+      if (inner) add(g);
+    }
+  };
+  run(0, 0, W, H);
+  for (const n of [2, 3]) {
+    const tw = Math.min(W, (W / n) * 1.5);
+    const th = Math.min(H, (H / n) * 1.5);
+    if (Math.max(tw, th) < 200) continue;
+    for (let iy = 0; iy < n; iy++)
+      for (let ix = 0; ix < n; ix++) run(((W - tw) * ix) / (n - 1), ((H - th) * iy) / (n - 1), tw, th);
+  }
+  return found.sort((a, b) => a.c.x - b.c.x);
+}
+
 /** Find every face in a photo and turn each into a character. */
 export async function detectFriends(src: HTMLCanvasElement, nameFor: (i: number) => string): Promise<CharacterData[]> {
   const [fl, pl] = await Promise.all([photoFaces(), photoPoses()]);
   const W = src.width;
   const H = src.height;
-  const faces = fl.detect(src).faceLandmarks.map((f) => faceGeom(f.map((p) => ({ x: p.x * W, y: p.y * H }))));
-  faces.sort((a, b) => a.c.x - b.c.x);
+  const faces = detectTiled(fl, src);
   let poses: NormalizedLandmark[][] = [];
   try {
     const pr = pl.detect(src);
