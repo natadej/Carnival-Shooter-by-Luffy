@@ -575,12 +575,17 @@ function detectTiled(fl: FaceLandmarker, src: HTMLCanvasElement): FaceGeom[] {
     }
   };
   run(0, 0, W, H);
-  for (const n of [2, 3]) {
-    const tw = Math.min(W, (W / n) * 1.5);
-    const th = Math.min(H, (H / n) * 1.5);
-    if (Math.max(tw, th) < 200) continue;
-    for (let iy = 0; iy < n; iy++)
-      for (let ix = 0; ix < n; ix++) run(((W - tw) * ix) / (n - 1), ((H - th) * iy) / (n - 1), tw, th);
+  // square tiles at 3 zoom levels; the face model needs a face to fill ~10%+ of its input
+  for (const n of [2, 3.5, 5]) {
+    const side = (Math.min(W, H) * 1.5) / n;
+    if (side < 120) continue;
+    const nx = Math.max(1, Math.ceil((W - side) / (side * 0.6)) + 1);
+    const ny = Math.max(1, Math.ceil((H - side) / (side * 0.6)) + 1);
+    const tw = Math.min(W, side);
+    const th = Math.min(H, side);
+    for (let iy = 0; iy < ny; iy++)
+      for (let ix = 0; ix < nx; ix++)
+        run(nx > 1 ? ((W - tw) * ix) / (nx - 1) : 0, ny > 1 ? ((H - th) * iy) / (ny - 1) : 0, tw, th);
   }
   return found.sort((a, b) => a.c.x - b.c.x);
 }
