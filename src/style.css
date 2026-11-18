@@ -74,3 +74,20 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #2a1458; tou
 .calib-actions { position: absolute; left: 0; right: 0; bottom: 18%; display: flex; gap: 12px; justify-content: center; }
 .calib-cancel { position: absolute; top: 10px; right: 10px; }
 .calib-preview { position: absolute; left: 50%; bottom: 10px; width: 140px; transform: translateX(-50%) scaleX(-1); border-radius: 10px; opacity: .7; }
+
+/* run score / leaderboard */
+.best { margin: 0 0 4px; color: #ffd23f; font-weight: 600; }
+.result .total { font-size: 2.4rem; font-weight: 700; margin: 2px 0; color: #ff5a5f; }
+.result .total small { font-size: 1rem; color: inherit; }
+.result .combo { margin: 0; color: #d6336c; font-weight: 600; }
+.result .best { color: #b8860b; }
+.result .submit { display: flex; gap: 6px; justify-content: center; margin: 8px 0 4px; flex-wrap: wrap; }
+.result .submit input { font: inherit; padding: .4em .7em; border: 3px solid #2b1b10; border-radius: 999px; min-width: 0; width: 11em; }
+.seg button { white-space: nowrap; }
+.board .panel { width: min(440px, 94vw); max-height: 90vh; display: flex; flex-direction: column; }
+.board .scores { list-style: none; margin: 0 0 12px; padding: 0; overflow-y: auto; }
+.board .scores li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 2px dashed rgba(43,27,16,.15); }
+.board .scores li.me { background: #fff3c4; border-radius: 10px; }
+.board .medal { width: 2em; text-align: center; font-weight: 700; }
+.board .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board .lv { font-size: .8rem; opacity: .7; }

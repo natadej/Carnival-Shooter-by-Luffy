@@ -11,11 +11,15 @@ import { EyeTracker, saveCalibration, type EyeSide } from './eyes';
 import { runCalibration } from './calibrate';
 import { setMusic, setSound, setVoice, sfx, startMusic, stopMusic } from './audio';
 import { pick } from './util';
+import { TiltAim } from './tilt';
+import { isGlobal, rankOf, submitScore, topScores, cleanName, type ScoreEntry } from './leaderboard';
 
 interface Settings {
-  control: 'touch' | 'eye';
+  control: 'touch' | 'eye' | 'tilt';
   eye: EyeSide;
   smooth: number;
+  tiltRange: number;
+  player: string;
   sound: boolean;
   music: boolean;
   voice: boolean;
@@ -23,7 +27,9 @@ interface Settings {
 
 const SKEY = 'cs.settings.v1';
 const PKEY = 'cs.prizes.v1';
-const settings: Settings = { control: 'touch', eye: 'right', smooth: 0.6, sound: true, music: true, voice: true, ...JSON.parse(localStorage.getItem(SKEY) || '{}') };
+const BKEY = 'cs.best.v1';
+let best: { score: number; level: number } = JSON.parse(localStorage.getItem(BKEY) || '{"score":0,"level":0}');
+const settings: Settings = { control: 'touch', eye: 'right', smooth: 0.6, tiltRange: 18, player: '', sound: true, music: true, voice: true, ...JSON.parse(localStorage.getItem(SKEY) || '{}') };
 const saveSettings = () => {
   localStorage.setItem(SKEY, JSON.stringify(settings));
   applySettings();
@@ -33,12 +39,14 @@ const PRIZES = ['🧸', '🎈', '🍭', '🦄', '🐻', '🍦', '🎁', '🐶', 
 const BIG_PRIZES = ['🏆', '👑', '🐉', '🎠'];
 
 const tracker = new EyeTracker();
+const tilt = new TiltAim();
 function applySettings() {
   setSound(settings.sound);
   setMusic(settings.music);
   setVoice(settings.voice);
   tracker.eye = settings.eye;
   tracker.setSmoothing(settings.smooth);
+  tilt.range = settings.tiltRange;
 }
 applySettings();
 
@@ -87,6 +95,8 @@ function show(html: string, cls: string) {
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
+const CONTROL_LABEL = { touch: 'แตะจอ 👆', eye: 'ยิงด้วยตา 👁️', tilt: 'เอียงเครื่อง 📱' } as const;
+
 // ---------------- home ----------------
 function home() {
   stopEyes();
@@ -95,10 +105,12 @@ function home() {
   show(
     `<div class="panel home">
       <h1>ยิงเป้า<span>แก๊งเพื่อน</span></h1>
-      <p class="sub">ยิงจุกก๊อก 5 นัด โดน 3 นัดรับรางวัล!</p>
+      <p class="sub">ยิงจุกก๊อก 5 นัด โดน 3 นัดไปต่อ · ยิ่งผ่านยิ่งเร็ว!</p>
+      ${best.score ? `<p class="best">สถิติของคุณ <b>${best.score.toLocaleString()}</b> แต้ม · รอบ ${best.level}</p>` : ''}
       <button class="btn primary big" id="play">เริ่มยิง! 🎯</button>
+      <button class="btn" id="board">อันดับ${isGlobal ? 'โลก 🌏' : ' 🏆'}</button>
       <button class="btn" id="friends">แก๊งเพื่อน (${n}) 📸</button>
-      <button class="btn" id="settings">ตั้งค่า ⚙️ · ${settings.control === 'eye' ? 'ยิงด้วยตา 👁️' : 'แตะจอ 👆'}</button>
+      <button class="btn" id="settings">ตั้งค่า ⚙️ · ${CONTROL_LABEL[settings.control]}</button>
       ${prizes.length ? `<div class="shelf" title="รางวัลที่ได้">${prizes.slice(-24).join('')}</div>` : ''}
       ${n === 0 ? '<p class="hint">ยังไม่มีรูปเพื่อน กด "แก๊งเพื่อน" เพื่ออัพโหลดรูปได้เลย</p>' : ''}
     </div>`,
@@ -106,6 +118,7 @@ function home() {
   );
   screen.querySelector('#play')!.addEventListener('click', () => (sfx.click(), play(1)));
   screen.querySelector('#friends')!.addEventListener('click', () => (sfx.click(), friendsScreen()));
+  screen.querySelector('#board')!.addEventListener('click', () => (sfx.click(), boardDialog()));
   screen.querySelector('#settings')!.addEventListener('click', () => (sfx.click(), settingsDialog(home)));
 }
 
@@ -275,7 +288,12 @@ function settingsDialog(onClose: () => void) {
   d.innerHTML = `<div class="panel settings">
     <h3>ตั้งค่า</h3>
     <label>วิธียิง</label>
-    ${seg('control', [['touch', '👆 แตะจอ / เมาส์'], ['eye', '👁️ กระพริบตา']], settings.control)}
+    ${seg('control', [['touch', '👆 แตะจอ'], ['tilt', '📱 เอียงเครื่อง'], ['eye', '👁️ กระพริบตา']], settings.control)}
+    <div class="tilt-opts">
+      <p class="small-note">เอียงมือถือ/iPad เพื่อเล็ง แตะตรงไหนก็ได้บนจอเพื่อยิง · กด 🎯 ในเกมเพื่อตั้งศูนย์ใหม่</p>
+      <label>ความไวการเอียง <small>(ไวมาก = เอียงนิดเดียวก็ถึงขอบจอ)</small></label>
+      <input type="range" min="8" max="35" step="1" value="${43 - settings.tiltRange}" id="tiltRange">
+    </div>
     <div class="eye-opts">
       <label>ตาที่ใช้ยิง (หลับตาข้างนี้ = ยิง)</label>
       ${seg('eye', [['left', '😉 ตาซ้าย'], ['right', 'ตาขวา 😜']], settings.eye)}
@@ -294,7 +312,15 @@ function settingsDialog(onClose: () => void) {
   </div>`;
   document.body.appendChild(d);
   const eyeOpts = d.querySelector<HTMLDivElement>('.eye-opts')!;
-  const sync = () => (eyeOpts.style.display = settings.control === 'eye' ? '' : 'none');
+  const tiltOpts = d.querySelector<HTMLDivElement>('.tilt-opts')!;
+  const sync = () => {
+    eyeOpts.style.display = settings.control === 'eye' ? '' : 'none';
+    tiltOpts.style.display = settings.control === 'tilt' ? '' : 'none';
+  };
+  d.querySelector<HTMLInputElement>('#tiltRange')!.addEventListener('input', (e) => {
+    settings.tiltRange = 43 - +(e.target as HTMLInputElement).value;
+    saveSettings();
+  });
   sync();
   d.querySelectorAll<HTMLDivElement>('.seg').forEach((s) =>
     s.querySelectorAll<HTMLButtonElement>('button').forEach((b) =>
@@ -348,9 +374,13 @@ function stopEyes() {
   eyeHud?.remove();
   eyeHud = null;
   tracker.stop();
+  tilt.stop();
+  tilt.onMove = null;
 }
 
 async function play(level: number) {
+  // iOS only shows the motion permission prompt when asked synchronously inside the tap
+  const tiltPerm = settings.control === 'tilt' ? TiltAim.requestPermission() : null;
   const eyeMode = settings.control === 'eye';
   if (eyeMode && !tracker.calib) {
     if (!(await calibrate())) {
@@ -360,13 +390,16 @@ async function play(level: number) {
   }
   const useEyes = settings.control === 'eye';
   const g = new Game(cast(), { level, slack: useEyes ? 16 : 9, onRoundEnd: (r) => result(r) });
-  g.eyeAim = useEyes;
-  g.winkHint = useEyes ? `หลับตา${settings.eye === 'left' ? 'ซ้าย' : 'ขวา'}เพื่อยิง 😉` : '';
+  const useTilt = settings.control === 'tilt';
+  g.eyeAim = useEyes || useTilt;
+  g.aimIcon = useEyes ? 'eye' : useTilt ? 'tilt' : '';
+  g.winkHint = useEyes ? `หลับตา${settings.eye === 'left' ? 'ซ้าย' : 'ขวา'}เพื่อยิง 😉` : useTilt ? 'เอียงเครื่องเล็ง แตะจอยิง 📱' : '';
   setGame(g);
   show(
     `<div class="hud-buttons">
       <button class="btn small" id="quit">⏸ เมนู</button>
       ${useEyes ? '<button class="btn small" id="recal">🎯 Calibrate</button>' : ''}
+      ${useTilt ? '<button class="btn small" id="recenter">🎯 ตั้งศูนย์</button>' : ''}
     </div>`,
     'screen play-screen',
   );
@@ -379,7 +412,33 @@ async function play(level: number) {
       await startEyes(g);
     });
     await startEyes(g);
+  } else if (useTilt) {
+    stopEyes();
+    screen.querySelector('#recenter')!.addEventListener('click', (e) => {
+      e.stopPropagation();
+      tilt.recenter();
+    });
+    await startTilt(g, tiltPerm!);
   } else stopEyes();
+}
+
+async function startTilt(g: Game, perm: Promise<boolean>) {
+  const ok = (await perm) && (await tilt.start());
+  if (!ok) {
+    alert('เครื่องนี้อ่านการเอียงไม่ได้ (หรือไม่ได้อนุญาต) เปลี่ยนเป็นโหมดแตะจอนะ');
+    settings.control = 'touch';
+    saveSettings();
+    g.eyeAim = false;
+    g.aimIcon = '';
+    g.winkHint = '';
+    screen.querySelector('#recenter')?.remove();
+    return;
+  }
+  tilt.onMove = () => {
+    if (game !== g) return;
+    g.aim = g.fromViewport(tilt.cursor);
+    g.showAim = true;
+  };
 }
 
 async function startEyes(g: Game) {
@@ -420,21 +479,22 @@ async function startEyes(g: Game) {
 
 function result(r: RoundResult) {
   const win = r.outcome !== 'lose';
-  const prize = win ? pick(r.outcome === 'perfect' ? BIG_PRIZES : PRIZES) : '';
-  if (win) {
-    prizes.push(prize);
-    localStorage.setItem(PKEY, JSON.stringify(prizes));
-    sfx.win();
-  } else sfx.lose();
+  if (!win) return gameOver(r);
+  const prize = pick(r.outcome === 'perfect' ? BIG_PRIZES : PRIZES);
+  prizes.push(prize);
+  localStorage.setItem(PKEY, JSON.stringify(prizes));
+  sfx.win();
   const d = document.createElement('div');
   d.className = 'modal result';
   d.innerHTML = `<div class="panel">
-    <h2>${r.outcome === 'perfect' ? 'แม่นสุดๆ! 5/5 🔥' : win ? 'ชนะแล้ว! 🎉' : 'อีกนิดเดียว! 😆'}</h2>
+    <h2>${r.outcome === 'perfect' ? 'แม่นสุดๆ! 5/5 🔥' : 'ผ่านรอบ ' + r.level + '! 🎉'}</h2>
     <p class="score">ยิงโดน <b>${r.hits}</b> / 5 นัด${r.heads ? ` · เฮดช็อต ${r.heads}` : ''}</p>
-    ${win ? `<div class="prize">${prize}</div><p>ได้รางวัลแล้ว!</p>` : '<p>ต้องโดนอย่างน้อย 3 นัดนะ เพื่อนๆ กำลังหัวเราะเยาะอยู่เลย!</p>'}
+    <p class="total">${r.score.toLocaleString()} <small>แต้ม</small></p>
+    ${r.combo >= 2 ? `<p class="combo">🔥 คอมโบ ${r.combo} ต่อเนื่องไปรอบหน้า!</p>` : ''}
+    <div class="prize">${prize}</div>
     <div class="row">
       <button class="btn" data-a="home">เมนู</button>
-      <button class="btn primary" data-a="next">${win ? `รอบต่อไป (เร็วขึ้น!) →` : 'ลองใหม่'}</button>
+      <button class="btn primary" data-a="next">รอบ ${r.level + 1} (เร็วขึ้น!) →</button>
     </div>
   </div>`;
   document.body.appendChild(d);
@@ -442,9 +502,97 @@ function result(r: RoundResult) {
     b.addEventListener('click', () => {
       d.remove();
       if (b.dataset.a === 'home') home();
-      else if (game) game.setLevel(win ? r.level + 1 : r.level);
+      else if (game) game.setLevel(r.level + 1);
     }),
   );
+}
+
+function gameOver(r: RoundResult) {
+  sfx.lose();
+  const isBest = r.score > best.score;
+  if (isBest) {
+    best = { score: r.score, level: r.level };
+    localStorage.setItem(BKEY, JSON.stringify(best));
+  }
+  const d = document.createElement('div');
+  d.className = 'modal result';
+  d.innerHTML = `<div class="panel">
+    <h2>จบเกม! 😆</h2>
+    <p class="score">รอบ ${r.level} ยิงโดน <b>${r.hits}</b> / 5 นัด · เพื่อนๆ หัวเราะเยาะแล้ว!</p>
+    <p class="total">${r.score.toLocaleString()} <small>แต้ม</small></p>
+    <p class="best">${isBest && r.score ? '🎉 สถิติใหม่ของคุณ!' : `สถิติของคุณ ${best.score.toLocaleString()}`}</p>
+    ${
+      r.score > 0
+        ? `<form class="submit"><input id="pname" maxlength="20" placeholder="ชื่อของคุณ" value="${esc(settings.player)}" required>
+           <button class="btn primary small">ส่งคะแนน${isGlobal ? 'ขึ้นอันดับโลก 🌏' : ' 🏆'}</button></form>
+           <p class="small-note rank-msg"></p>`
+        : ''
+    }
+    <div class="row">
+      <button class="btn" data-a="home">เมนู</button>
+      <button class="btn" data-a="board">อันดับ</button>
+      <button class="btn primary" data-a="again">เล่นใหม่ ↺</button>
+    </div>
+  </div>`;
+  document.body.appendChild(d);
+  const form = d.querySelector<HTMLFormElement>('form.submit');
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = cleanName(d.querySelector<HTMLInputElement>('#pname')!.value);
+    if (!name) return;
+    settings.player = name;
+    saveSettings();
+    const msg = d.querySelector<HTMLElement>('.rank-msg')!;
+    form.querySelector('button')!.disabled = true;
+    msg.textContent = 'กำลังส่ง...';
+    try {
+      await submitScore({ name, score: r.score, level: r.level });
+      const rank = await rankOf(r.score).catch(() => null);
+      form.remove();
+      msg.textContent = rank ? `ได้อันดับที่ ${rank}${isGlobal ? ' ของโลก' : ''}! 🏅` : 'ส่งแล้ว!';
+    } catch (err) {
+      console.warn(err);
+      form.querySelector('button')!.disabled = false;
+      msg.textContent = 'ส่งไม่สำเร็จ ลองใหม่อีกครั้งนะ (ต้องต่อเน็ต)';
+    }
+  });
+  d.querySelectorAll<HTMLButtonElement>('[data-a]').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (b.dataset.a === 'board') return boardDialog();
+      d.remove();
+      if (b.dataset.a === 'home') home();
+      else if (game) game.setLevel(1, false);
+    }),
+  );
+}
+
+async function boardDialog() {
+  const d = document.createElement('div');
+  d.className = 'modal board';
+  d.innerHTML = `<div class="panel">
+    <h3>${isGlobal ? 'อันดับโลก 🌏' : 'อันดับในเครื่องนี้ 🏆'}</h3>
+    <ol class="scores"><li class="small-note">กำลังโหลด...</li></ol>
+    <button class="btn primary" id="close">ปิด</button>
+  </div>`;
+  document.body.appendChild(d);
+  d.querySelector('#close')!.addEventListener('click', () => d.remove());
+  const ol = d.querySelector('ol')!;
+  let list: ScoreEntry[] = [];
+  try {
+    list = await topScores(50);
+  } catch (e) {
+    console.warn(e);
+    ol.innerHTML = '<li class="small-note">โหลดอันดับไม่ได้ (ต้องต่อเน็ต)</li>';
+    return;
+  }
+  ol.innerHTML = list.length
+    ? list
+        .map(
+          (e, i) =>
+            `<li class="${e.name === settings.player ? 'me' : ''}"><span class="medal">${['🥇', '🥈', '🥉'][i] ?? i + 1}</span><span class="nm">${esc(e.name)}</span><span class="lv">รอบ ${e.level}</span><b>${e.score.toLocaleString()}</b></li>`,
+        )
+        .join('')
+    : '<li class="small-note">ยังไม่มีใครส่งคะแนน เป็นคนแรกเลย!</li>';
 }
 
 loadFriends()
