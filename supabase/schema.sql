@@ -15,3 +15,7 @@ drop policy if exists "anyone can read" on public.scores;
 create policy "anyone can read" on public.scores for select using (true);
 drop policy if exists "anyone can submit" on public.scores;
 create policy "anyone can submit" on public.scores for insert with check (true);
+
+revoke all on public.scores from anon, authenticated;
+grant select on public.scores to anon, authenticated;
+grant insert (name, score, level) on public.scores to anon, authenticated;
