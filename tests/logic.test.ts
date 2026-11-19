@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyLinear, canShoot, fire, fitLinear, land, newRound, outcome, OneEuro, WinkDetector, winkFromSamples } from '../src/logic';
+import { applyLinear, canShoot, fire, fitLinear, land, MAX_COMBO_MULT, maxScore, newRound, outcome, OneEuro, perfectBonus, speedFor, surge, tiltDelta, WinkDetector, winkFromSamples } from '../src/logic';
 
 describe('round rules', () => {
   it('needs 3 of 5 to win', () => {
@@ -68,5 +68,44 @@ describe('gaze regression', () => {
     let out = 0;
     for (let i = 0; i < 60; i++) out = f.filter(100 + (i % 2 ? 10 : -10), i * 16);
     expect(Math.abs(out - 100)).toBeLessThan(6);
+  });
+});
+
+describe('scoring & levels', () => {
+  it('combo multiplies points and carries across rounds; a miss resets it', () => {
+    let r = newRound(2);
+    r = land(fire(r), true);
+    expect(r.score).toBe(200);
+    r = land(fire(r), true, true);
+    expect(r.lastPoints).toBe(Math.round(150 * 2 * 1.5));
+    const next = newRound(3, r.score, r.combo);
+    expect(next.combo).toBe(2);
+    expect(land(fire(next), false).combo).toBe(0);
+  });
+  it('perfect round adds a bonus and never exceeds the leaderboard bound', () => {
+    let r = newRound(1, 0, 10);
+    for (let i = 0; i < 5; i++) r = land(fire(r), true, true);
+    expect(r.score).toBe(5 * 150 * MAX_COMBO_MULT + perfectBonus(1));
+    expect(r.score).toBeLessThanOrEqual(maxScore(1));
+  });
+  it('gets faster every level, capped', () => {
+    for (let l = 1; l < 40; l++) expect(speedFor(l + 1)).toBeGreaterThanOrEqual(speedFor(l));
+    expect(speedFor(2)).toBeGreaterThan(speedFor(1));
+    expect(speedFor(100)).toBe(5);
+    expect(surge(1, 3, 0)).toBe(1);
+  });
+});
+
+describe('tilt aiming', () => {
+  const ref = { beta: 40, gamma: 0 };
+  it('maps portrait tilt to screen axes', () => {
+    expect(tiltDelta(50, 10, ref, 0)).toEqual({ x: 10, y: 10 });
+  });
+  it('rotates axes in landscape', () => {
+    expect(tiltDelta(50, 5, ref, 90)).toEqual({ x: 10, y: -5 });
+    expect(tiltDelta(50, 5, ref, 270)).toEqual({ x: -10, y: 5 });
+  });
+  it('wraps across ±180', () => {
+    expect(tiltDelta(-175, 0, { beta: 175, gamma: 0 }, 0).y).toBeCloseTo(10);
   });
 });

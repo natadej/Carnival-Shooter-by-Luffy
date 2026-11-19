@@ -9,9 +9,31 @@ export interface RoundState {
   hits: number;
   heads: number;
   pending: number;
+  /** run score, carried across rounds */
+  score: number;
+  /** consecutive hits, carried across rounds */
+  combo: number;
+  /** points of the most recent hit (for floaters) */
+  lastPoints: number;
 }
 
-export const newRound = (level: number): RoundState => ({ level, shotsLeft: SHOTS_PER_ROUND, hits: 0, heads: 0, pending: 0 });
+export const newRound = (level: number, score = 0, combo = 0): RoundState => ({
+  level,
+  shotsLeft: SHOTS_PER_ROUND,
+  hits: 0,
+  heads: 0,
+  pending: 0,
+  score,
+  combo,
+  lastPoints: 0,
+});
+
+export const MAX_COMBO_MULT = 3;
+export const comboMult = (combo: number) => Math.min(MAX_COMBO_MULT, 1 + 0.5 * Math.max(0, combo - 1));
+export const hitPoints = (level: number, head: boolean, combo: number) => Math.round((head ? 150 : 100) * level * comboMult(combo));
+export const perfectBonus = (level: number) => 500 * level;
+/** Upper bound of a legit run score after clearing `level` rounds (mirrored by the leaderboard DB check). */
+export const maxScore = (level: number) => 2750 * ((level * (level + 1)) / 2);
 
 export function canShoot(r: RoundState): boolean {
   return r.shotsLeft > 0;
@@ -23,7 +45,13 @@ export function fire(r: RoundState): RoundState {
 }
 
 export function land(r: RoundState, hit: boolean, head = false): RoundState {
-  return { ...r, pending: Math.max(0, r.pending - 1), hits: r.hits + (hit ? 1 : 0), heads: r.heads + (hit && head ? 1 : 0) };
+  const pending = Math.max(0, r.pending - 1);
+  if (!hit) return { ...r, pending, combo: 0, lastPoints: 0 };
+  const combo = r.combo + 1;
+  const pts = hitPoints(r.level, head, combo);
+  const hits = r.hits + 1;
+  const bonus = hits === SHOTS_PER_ROUND ? perfectBonus(r.level) : 0;
+  return { ...r, pending, hits, heads: r.heads + (head ? 1 : 0), combo, score: r.score + pts + bonus, lastPoints: pts };
 }
 
 export type Outcome = 'playing' | 'win' | 'perfect' | 'lose';
@@ -37,8 +65,38 @@ export function outcome(r: RoundState): Outcome {
   return r.hits >= HITS_TO_WIN ? 'win' : 'lose';
 }
 
+/** Belt speed multiplier: ramps quickly early, then keeps creeping up. */
 export function speedFor(level: number): number {
-  return 1 + 0.2 * (level - 1);
+  const l = Math.min(35, Math.max(0, level - 1));
+  return Math.min(5, 1 + 0.28 * l - 0.004 * l * l);
+}
+
+/** Belt speed wobble at higher levels so targets surge and brake. */
+export function surge(level: number, t: number, row: number): number {
+  if (level < 3) return 1;
+  const amp = Math.min(0.5, 0.12 * (level - 2));
+  return 1 + amp * Math.sin(t * (0.9 + 0.25 * row) + row * 2.1);
+}
+
+const wrap180 = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
+
+/**
+ * Converts device orientation (deg) into screen-space tilt deltas relative to a reference pose.
+ * `angle` is screen.orientation.angle (0, 90, 180, 270). Returns {x: right+, y: down+} in degrees.
+ */
+export function tiltDelta(beta: number, gamma: number, ref: { beta: number; gamma: number }, angle: number): { x: number; y: number } {
+  const db = wrap180(beta - ref.beta);
+  const dg = wrap180(gamma - ref.gamma);
+  switch (((angle % 360) + 360) % 360) {
+    case 90:
+      return { x: db, y: -dg };
+    case 180:
+      return { x: -dg, y: -db };
+    case 270:
+      return { x: -db, y: dg };
+    default:
+      return { x: dg, y: db };
+  }
 }
 
 /** Fires once per deliberate wink of the chosen eye; ignores normal two-eye blinks. */

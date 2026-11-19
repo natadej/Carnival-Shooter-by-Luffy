@@ -1,6 +1,6 @@
 import type { RuntimeChar } from './character';
 import { animate, drawPuppet, hitTest, MOVE_ANIMS, STOP_ANIMS, type AnimName, type Capsule } from './puppet';
-import { canShoot, fire, land, newRound, outcome, speedFor, HITS_TO_WIN, SHOTS_PER_ROUND, type Outcome, type RoundState } from './logic';
+import { canShoot, comboMult, fire, land, newRound, outcome, speedFor, surge, HITS_TO_WIN, SHOTS_PER_ROUND, type Outcome, type RoundState } from './logic';
 import { say, sfx } from './audio';
 import { canvas, clamp, pick, rand, type Pt } from './util';
 
@@ -80,6 +80,8 @@ export interface RoundResult {
   hits: number;
   heads: number;
   level: number;
+  score: number;
+  combo: number;
 }
 
 export interface GameOptions {
@@ -117,7 +119,9 @@ export class Game {
   round: RoundState;
   aim: Pt = { x: 0, y: 0 };
   showAim = true;
+  /** reticle is driven externally (eyes / tilt); taps fire at the reticle */
   eyeAim = false;
+  aimIcon: 'eye' | 'tilt' | '' = '';
   winkHint = '';
 
   constructor(
@@ -240,8 +244,10 @@ export class Game {
     };
   }
 
-  setLevel(level: number) {
-    this.round = newRound(level);
+  /** `carry` keeps the run's score and combo (next round); otherwise a new run starts. */
+  setLevel(level: number, carry = true) {
+    const r = this.round;
+    this.round = carry ? newRound(level, r.score, r.combo) : newRound(level);
     this.ended = false;
     this.introT = 0;
     this.corks = [];
@@ -285,6 +291,9 @@ export class Game {
       const r = hitTest(t.caps, p, slack);
       if (r.hit) {
         this.round = land(this.round, true, r.head);
+        const { combo, lastPoints } = this.round;
+        this.floaters.push({ x: p.x, y: p.y + this.U * 1.2, text: `+${lastPoints}`, t: 0, color: '#7dffb0', size: 0.75 });
+        if (combo >= 2) this.floaters.push({ x: p.x, y: p.y - this.U * 1.6, text: `คอมโบ x${comboMult(combo)}!`, t: 0, color: '#ff7ab6', size: 0.9 });
         t.mode = 'down';
         t.modeT = 0;
         t.bubble = null;
@@ -338,15 +347,17 @@ export class Game {
     this.time += dt;
     this.introT += dt;
     this.recoil = Math.max(0, this.recoil - dt * 6);
-    for (const r of this.rows) r.belt = (r.belt + r.dir * r.speed * dt) % 40;
     const lvl = this.round.level;
+    const surges = this.rows.map((_, i) => (this.opts.attract ? 1 : surge(lvl, this.time, i)));
+    this.rows.forEach((r, i) => (r.belt = (r.belt + r.dir * r.speed * surges[i] * dt) % 40));
     for (const t of this.targets) {
       const row = t.row!;
+      const rowSpeed = row.speed * surges[this.rows.indexOf(row)];
       t.modeT += dt;
       t.animT += dt;
       if (t.bubble && (t.bubble.t += dt) > 2.2) t.bubble = null;
       if (t.mode === 'move' || t.mode === 'rise') {
-        t.x += row.dir * row.speed * dt;
+        t.x += row.dir * rowSpeed * dt;
         const sp = this.spacing(row);
         if (row.dir > 0 && t.x > this.W + sp) this.wrap(t, t.x - this.W - sp * 2);
         if (row.dir < 0 && t.x < -sp) this.wrap(t, t.x + this.W + sp * 2);
@@ -416,7 +427,7 @@ export class Game {
       if (o !== 'playing') {
         this.ended = true;
         const r = this.round;
-        setTimeout(() => this.opts.onRoundEnd?.({ outcome: o, hits: r.hits, heads: r.heads, level: r.level }), 900);
+        setTimeout(() => this.opts.onRoundEnd?.({ outcome: o, hits: r.hits, heads: r.heads, level: r.level, score: r.score, combo: r.combo }), 900);
       }
     }
   }
@@ -716,7 +727,11 @@ export class Game {
     g.beginPath();
     g.arc(x, y, 3, 0, Math.PI * 2);
     g.fill();
-    if (this.eyeAim) {
+    if (this.aimIcon === 'tilt') {
+      g.font = `${Math.round(r * 1.1)}px ${FONT}`;
+      g.textAlign = 'center';
+      g.fillText('📱', x + r * 1.4, y - r * 1.1);
+    } else if (this.aimIcon === 'eye') {
       // little eye icon so players know the reticle follows their gaze
       g.fillStyle = '#fff';
       g.beginPath();
@@ -780,7 +795,15 @@ export class Game {
     g.font = `600 ${Math.round(cs * 1.1)}px ${FONT}`;
     g.fillStyle = '#fff';
     g.textAlign = 'center';
-    g.fillText(`รอบ ${r.level}`, this.W / 2, y + cs * 0.4);
+    g.fillText(`รอบ ${r.level}`, this.W / 2, y - cs * 0.15);
+    g.font = `700 ${Math.round(cs * 1.25)}px ${FONT}`;
+    g.fillStyle = '#ffd23f';
+    g.fillText(r.score.toLocaleString(), this.W / 2, y + cs * 1.25);
+    if (r.combo >= 2) {
+      g.font = `600 ${Math.round(cs * 0.85)}px ${FONT}`;
+      g.fillStyle = '#ff7ab6';
+      g.fillText(`🔥 คอมโบ ${r.combo}`, this.W / 2, y + cs * 2.4);
+    }
     // intro banner
     if (this.introT < 1.8) {
       const a = this.introT < 1.4 ? 1 : 1 - (this.introT - 1.4) / 0.4;
@@ -791,7 +814,7 @@ export class Game {
       g.strokeStyle = '#5a1d00';
       g.fillStyle = '#ffd23f';
       const t1 = `รอบที่ ${r.level}`;
-      const t2 = `ยิงให้โดน ${HITS_TO_WIN} ใน ${SHOTS_PER_ROUND} นัด!`;
+      const t2 = `ยิงให้โดน ${HITS_TO_WIN} ใน ${SHOTS_PER_ROUND} นัด!${r.level > 1 ? ` · เร็ว x${speedFor(r.level).toFixed(1)}` : ''}`;
       g.strokeText(t1, this.W / 2, this.H * 0.42);
       g.fillText(t1, this.W / 2, this.H * 0.42);
       g.font = `600 ${Math.round(fs * 0.6)}px ${FONT}`;
