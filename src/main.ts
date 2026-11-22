@@ -12,6 +12,7 @@ import { runCalibration } from './calibrate';
 import { setMusic, setSound, setVoice, sfx, startMusic, stopMusic } from './audio';
 import { pick } from './util';
 import { TiltAim } from './tilt';
+import { activeGroup, addGroup, forgetFriend, inPlay, parseGroups, removeGroup, renameGroup, setMember, type GroupState } from './groups';
 import { isGlobal, rankOf, submitScore, topScores, cleanName, type ScoreEntry } from './leaderboard';
 
 interface Settings {
@@ -51,6 +52,13 @@ function applySettings() {
 applySettings();
 
 let friends: CharacterData[] = [];
+const GKEY = 'cs.groups.v1';
+let groups: GroupState = parseGroups(localStorage.getItem(GKEY));
+const saveGroups = (s: GroupState) => {
+  groups = s;
+  localStorage.setItem(GKEY, JSON.stringify(s));
+};
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 let runtime = new Map<string, RuntimeChar>();
 const builtins = builtinCharacters().map(prepare);
 
@@ -64,7 +72,7 @@ function rt(c: CharacterData): RuntimeChar {
 }
 
 function cast(): RuntimeChar[] {
-  const mine = friends.map(rt);
+  const mine = inPlay(groups, friends).map(rt);
   if (mine.length >= 4) return mine;
   return [...mine, ...builtins.slice(0, 6 - mine.length)];
 }
@@ -101,12 +109,19 @@ const CONTROL_LABEL = { touch: 'แตะจอ 👆', eye: 'ยิงด้ว�
 function home() {
   stopEyes();
   setGame(new Game(cast(), { attract: true }));
-  const n = friends.length;
+  const n = inPlay(groups, friends).length;
+  const groupPick = groups.groups.length
+    ? `<label class="group-pick">เล่นกับ <select id="group">
+        <option value="">ทุกคน (${friends.length})</option>
+        ${groups.groups.map((g) => `<option value="${g.id}" ${g.id === groups.active ? 'selected' : ''}>${esc(g.name)} (${inPlay({ ...groups, active: g.id }, friends).length})</option>`).join('')}
+      </select></label>`
+    : '';
   show(
     `<div class="panel home">
       <h1>ยิงเป้า<span>แก๊งเพื่อน</span></h1>
       <p class="sub">ยิงจุกก๊อก 5 นัด โดน 3 นัดไปต่อ · ยิ่งผ่านยิ่งเร็ว!</p>
       ${best.score ? `<p class="best">สถิติของคุณ <b>${best.score.toLocaleString()}</b> แต้ม · รอบ ${best.level}</p>` : ''}
+      ${groupPick}
       <button class="btn primary big" id="play">เริ่มยิง! 🎯</button>
       <button class="btn" id="board">อันดับ${isGlobal ? 'โลก 🌏' : ' 🏆'}</button>
       <button class="btn" id="friends">แก๊งเพื่อน (${n}) 📸</button>
@@ -119,6 +134,10 @@ function home() {
   screen.querySelector('#play')!.addEventListener('click', () => (sfx.click(), play(1)));
   screen.querySelector('#friends')!.addEventListener('click', () => (sfx.click(), friendsScreen()));
   screen.querySelector('#board')!.addEventListener('click', () => (sfx.click(), boardDialog()));
+  screen.querySelector<HTMLSelectElement>('#group')?.addEventListener('change', (e) => {
+    saveGroups({ ...groups, active: (e.target as HTMLSelectElement).value || null });
+    home();
+  });
   screen.querySelector('#settings')!.addEventListener('click', () => (sfx.click(), settingsDialog(home)));
 }
 
@@ -133,6 +152,7 @@ function friendsScreen() {
         <h2>แก๊งเพื่อน</h2>
         <span class="count"></span>
       </header>
+      <div class="group-bar"></div>
       <div class="add-row">
         <label class="btn primary">+ อัพโหลดรูปเพื่อน<input type="file" accept="image/*" multiple id="files" hidden></label>
         <label class="btn">📷 ถ่ายรูป<input type="file" accept="image/*" capture="environment" id="cam" hidden></label>
@@ -149,26 +169,87 @@ function friendsScreen() {
   screen.querySelector('#back')!.addEventListener('click', home);
   const cards = new Map<string, { c: HTMLCanvasElement; ch: RuntimeChar; anim: (typeof STOP_ANIMS)[number] }>();
 
+  const bar = screen.querySelector<HTMLDivElement>('.group-bar')!;
+  const renderBar = () => {
+    const g = activeGroup(groups);
+    bar.innerHTML = `<div class="chips">
+        <button class="chip ${g ? '' : 'on'}" data-g="">ทุกคน (${friends.length})</button>
+        ${groups.groups.map((x) => `<button class="chip ${x.id === groups.active ? 'on' : ''}" data-g="${x.id}">${esc(x.name)} (${inPlay({ ...groups, active: x.id }, friends).length})</button>`).join('')}
+        <button class="chip add" id="newg">+ สร้างกลุ่มใหม่</button>
+      </div>
+      ${
+        g
+          ? `<div class="group-tools">
+          <input id="gname" value="${esc(g.name)}" maxlength="24" aria-label="ชื่อกลุ่ม">
+          <button class="btn small" id="pick">👥 เลือกเพื่อนเข้ากลุ่ม</button>
+          <button class="btn small" id="delg">🗑 ลบกลุ่ม</button>
+        </div>
+        <p class="tip">เล่นกลุ่มนี้ = เห็นแค่เพื่อนในกลุ่มนี้ · รูปที่อัพโหลดตอนนี้จะเข้ากลุ่มนี้ · บันทึกให้อัตโนมัติ</p>`
+          : groups.groups.length
+            ? ''
+            : '<p class="tip">มีเพื่อนหลายแก๊ง? กด "สร้างกลุ่มใหม่" แล้วเลือกกลุ่มก่อนเล่น เพื่อนต่างกลุ่มจะไม่ปนกัน</p>'
+      }`;
+    bar.querySelectorAll<HTMLButtonElement>('[data-g]').forEach((b) =>
+      b.addEventListener('click', () => {
+        sfx.click();
+        saveGroups({ ...groups, active: b.dataset.g || null });
+        render();
+      }),
+    );
+    bar.querySelector('#newg')!.addEventListener('click', async () => {
+      sfx.click();
+      const name = await askName('สร้างกลุ่มใหม่', `กลุ่ม ${groups.groups.length + 1}`);
+      if (!name) return;
+      saveGroups(addGroup(groups, newId(), name));
+      render();
+    });
+    if (!g) return;
+    const gname = bar.querySelector<HTMLInputElement>('#gname')!;
+    gname.addEventListener('change', () => {
+      saveGroups(renameGroup(groups, g.id, gname.value.trim().slice(0, 24) || g.name));
+      renderBar();
+    });
+    bar.querySelector('#pick')!.addEventListener('click', () => pickMembers(g.id, render));
+    bar.querySelector('#delg')!.addEventListener('click', () => {
+      if (!confirm(`ลบกลุ่ม "${g.name}" ? (รูปเพื่อนไม่หาย)`)) return;
+      saveGroups(removeGroup(groups, g.id));
+      render();
+    });
+  };
+
   const render = () => {
-    count.textContent = `${friends.length} คน`;
+    renderBar();
+    const inGroup = !!activeGroup(groups);
+    const list = inPlay(groups, friends);
+    count.textContent = `${list.length} คน`;
     grid.innerHTML = '';
     cards.clear();
-    if (!friends.length) grid.innerHTML = '<p class="empty">ยังไม่มีเพื่อนเลย อัพโหลดรูปได้ไม่จำกัด!</p>';
-    for (const f of [...friends].reverse()) {
+    if (!list.length)
+      grid.innerHTML = inGroup
+        ? '<p class="empty">กลุ่มนี้ยังไม่มีเพื่อน อัพโหลดรูปใหม่ หรือกด "เลือกเพื่อนเข้ากลุ่ม"</p>'
+        : '<p class="empty">ยังไม่มีเพื่อนเลย อัพโหลดรูปได้ไม่จำกัด!</p>';
+    for (const f of [...list].reverse()) {
       const card = document.createElement('div');
       card.className = 'card';
       card.innerHTML = `<canvas width="160" height="200"></canvas>
         <input value="${esc(f.name)}" maxlength="24" aria-label="ชื่อ">
         <div class="tags">${f.torso ? '<span>ชุดจริง</span>' : '<span>หัวการ์ตูน</span>'}</div>
-        <button class="del" title="ลบ">✕</button>`;
+        <button class="del" title="${inGroup ? 'เอาออกจากกลุ่ม' : 'ลบ'}">✕</button>`;
       const input = card.querySelector('input')!;
       input.addEventListener('change', async () => {
         f.name = input.value.trim() || f.name;
         await renameFriend(f.id, f.name);
       });
       card.querySelector('.del')!.addEventListener('click', async () => {
-        if (!confirm(`ลบ ${f.name} ?`)) return;
+        const g = activeGroup(groups);
+        if (g) {
+          saveGroups(setMember(groups, g.id, f.id, false));
+          render();
+          return;
+        }
+        if (!confirm(`ลบ ${f.name} ? (จะหายจากทุกกลุ่ม)`)) return;
         await deleteFriend(f.id);
+        saveGroups(forgetFriend(groups, f.id));
         friends = friends.filter((x) => x.id !== f.id);
         runtime.delete(f.id);
         render();
@@ -212,6 +293,7 @@ function friendsScreen() {
         for (const c of found) {
           await saveFriend(c);
           friends.push(c);
+          if (groups.active) saveGroups(setMember(groups, groups.active, c.id, true));
           added++;
         }
         render();
@@ -229,6 +311,64 @@ function friendsScreen() {
       void handle(inp.files).then(() => (inp.value = ''));
     });
   }
+}
+
+function askName(title: string, value: string): Promise<string | null> {
+  return new Promise((res) => {
+    const d = document.createElement('div');
+    d.className = 'modal';
+    d.innerHTML = `<form class="panel ask">
+      <h3>${esc(title)}</h3>
+      <input maxlength="24" required value="${esc(value)}" aria-label="ชื่อกลุ่ม">
+      <div class="row"><button type="button" class="btn" id="cancel">ยกเลิก</button><button class="btn primary">💾 บันทึก</button></div>
+    </form>`;
+    document.body.appendChild(d);
+    const inp = d.querySelector('input')!;
+    inp.select();
+    const done = (v: string | null) => (d.remove(), res(v));
+    d.querySelector('#cancel')!.addEventListener('click', () => done(null));
+    d.querySelector('form')!.addEventListener('submit', (e) => {
+      e.preventDefault();
+      done(inp.value.trim().slice(0, 24) || null);
+    });
+  });
+}
+
+/** Tick which existing friends belong to a group. */
+function pickMembers(groupId: string, onClose: () => void) {
+  const g = groups.groups.find((x) => x.id === groupId);
+  if (!g) return;
+  const d = document.createElement('div');
+  d.className = 'modal';
+  d.innerHTML = `<div class="panel members">
+    <h3>เพื่อนในกลุ่ม "${esc(g.name)}"</h3>
+    <p class="small-note">แตะเพื่อเลือก/เอาออก · เพื่อนหนึ่งคนอยู่ได้หลายกลุ่ม</p>
+    <div class="pick-grid">${
+      friends.length
+        ? [...friends].reverse().map((f) => `<label><input type="checkbox" value="${f.id}" ${g.members.includes(f.id) ? 'checked' : ''}><img alt=""><span>${esc(f.name)}</span></label>`).join('')
+        : '<p class="small-note">ยังไม่มีรูปเพื่อน อัพโหลดก่อนนะ</p>'
+    }</div>
+    <div class="row"><button class="btn small" id="all">เลือกทั้งหมด</button><button class="btn small" id="none">ไม่เลือกเลย</button><button class="btn primary" id="done">เสร็จ</button></div>
+  </div>`;
+  const byId = new Map(friends.map((f) => [f.id, f]));
+  d.querySelectorAll<HTMLLabelElement>('.pick-grid label').forEach((l) => {
+    const f = byId.get(l.querySelector('input')!.value)!;
+    l.querySelector('img')!.src = f.head.img.toDataURL();
+  });
+  const boxes = [...d.querySelectorAll<HTMLInputElement>('input[type=checkbox]')];
+  const apply = () => boxes.forEach((b) => saveGroups(setMember(groups, groupId, b.value, b.checked)));
+  boxes.forEach((b) => b.addEventListener('change', apply));
+  const setAll = (v: boolean) => {
+    boxes.forEach((b) => (b.checked = v));
+    apply();
+  };
+  d.querySelector('#all')!.addEventListener('click', () => setAll(true));
+  d.querySelector('#none')!.addEventListener('click', () => setAll(false));
+  d.querySelector('#done')!.addEventListener('click', () => {
+    d.remove();
+    onClose();
+  });
+  document.body.appendChild(d);
 }
 
 /** When no face is detected: let the player tap the face and size the circle. */
