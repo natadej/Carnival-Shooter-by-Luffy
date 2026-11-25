@@ -31,6 +31,8 @@
 .cartoon .empty { background: #fff8e6; border: 2px dashed #6c9592; border-radius: 24px; grid-column: 1 / -1; padding: 70px 20px; text-align: center; opacity: 1; color: #426764; }
 .cartoon .card { background: #fff8e6; border: 2px solid var(--ink); box-shadow: 0 4px 0 var(--ink); }
 .cartoon .modal { background: #123e467a; backdrop-filter: blur(5px); }
+/* Chromium can tile a backdrop-filter inside a scaled comparison iframe. */
+.cartoon.comparison-embed .modal { backdrop-filter: none; }
 .cartoon .modal h3, .cartoon .modal h2 { color: var(--ink); }
 .cartoon .settings { gap: 12px; }
 .cartoon .seg { border: 2px solid var(--ink); border-radius: 12px; }

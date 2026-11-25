@@ -30,6 +30,7 @@ interface Settings {
 
 const SKEY = 'cs.settings.v1';
 document.body.classList.toggle('cartoon', cartoonArt);
+document.body.classList.toggle('comparison-embed', inComparison);
 const PKEY = 'cs.prizes.v1';
 const BKEY = 'cs.best.v1';
 let best: { score: number; level: number } = JSON.parse(localStorage.getItem(BKEY) || '{"score":0,"level":0}');
