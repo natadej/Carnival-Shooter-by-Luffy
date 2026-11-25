@@ -799,6 +799,16 @@ export class Game {
         g.setLineDash([]);
       }
     }
+    if (cartoonArt) {
+      // The paper backdrop is light: keep the existing white/yellow HUD on ink.
+      g.fillStyle = '#193c43';
+      g.strokeStyle = '#f5c75f';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.roundRect(this.W / 2 - cs * 4.3, y - cs * 1.45, cs * 8.6, cs * (r.combo >= 2 ? 4.3 : 3.25), cs * .7);
+      g.fill();
+      g.stroke();
+    }
     g.font = `600 ${Math.round(cs * 1.1)}px ${FONT}`;
     g.fillStyle = '#fff';
     g.textAlign = 'center';
