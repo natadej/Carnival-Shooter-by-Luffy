@@ -1,0 +1,62 @@
+/* Visual concept only: every rule is scoped so the original remains comparable. */
+.cartoon { --ink: #193c43; --paper: #fff8e6; --coral: #e86b56; color: var(--ink); }
+.cartoon .panel { background: var(--paper); border: 2px solid var(--ink); border-radius: 26px; box-shadow: 0 7px 0 var(--ink), 0 18px 45px #143e4630; padding: 26px; }
+.cartoon .btn { color: var(--ink); border: 2px solid var(--ink); border-radius: 13px; background: #fffaf0; box-shadow: 0 4px 0 var(--ink); font-size: .95rem; padding: .6em 1.1em; transition: background .15s, transform .15s; }
+.cartoon .btn:hover { background: #ffebbc; transform: translateY(-1px); }
+.cartoon .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+.cartoon .btn.primary { background: #f7c85a; }
+.cartoon .btn.big { background: var(--coral); color: #fffaf0; font-size: 1.35rem; padding: .55em 1.4em; }
+.cartoon .home-screen { justify-content: flex-start; padding-left: 7vw; background: linear-gradient(90deg, #fff0cf55, transparent 75%); }
+.cartoon .home { position: relative; width: 390px; max-width: 90vw; gap: 12px; background: #fff8e6fa; transform: rotate(-1deg); overflow: visible; }
+.cartoon .home::before { content: '✦  ยินดีต้อนรับสู่งานวัด  ✦'; background: #1c5863; color: #ffe5ad; position: absolute; left: 50%; top: -17px; transform: translateX(-50%) rotate(1deg); border-radius: 5px; padding: 5px 18px; font-size: .72rem; letter-spacing: .04em; white-space: nowrap; }
+.cartoon .home h1 { color: var(--ink); font-size: clamp(2rem, 4.7vw, 3.25rem); line-height: 1.25; margin: 8px 0 2px; text-shadow: 2px 3px 0 #f7c85a; }
+.cartoon .home h1 span { color: var(--coral); text-shadow: 2px 3px 0 #ffdda1; }
+.cartoon .home .sub { font-size: .8rem; max-width: 280px; margin: 0 auto 4px; }
+.cartoon .home .hint { font-size: .69rem; margin: 5px 0 0; }
+.cartoon .home .best { color: #22717b; }
+.cartoon .shelf { background: #d8e7d5; border: 1px dashed var(--ink); }
+.cartoon .hero-sticker { position: fixed; left: 57%; right: 5%; top: 23%; bottom: 15%; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.cartoon .hero-sticker .hero-label { color: #fff8e6; background: var(--coral); border: 3px solid var(--ink); border-radius: 50%; padding: 16px 25px; transform: rotate(7deg); box-shadow: 5px 6px 0 #fff4d9; font-size: clamp(1rem, 2.3vw, 2rem); font-weight: 700; text-align: center; }
+.cartoon .hero-sticker canvas { width: 100%; max-width: 440px; height: auto; filter: drop-shadow(0 8px 0 #193c4330); }
+.cartoon .hero-sticker small { color: var(--ink); background: #ffdf91; padding: 6px 18px; border: 2px solid var(--ink); border-radius: 8px; transform: rotate(-3deg); box-shadow: 3px 3px 0 #193c43; }
+.cartoon .friends-screen { background-color: #d8e7d5; background-image: radial-gradient(#193c4317 1.4px, transparent 1.4px); background-size: 18px 18px; }
+.cartoon .friends { color: var(--ink); padding-top: 28px; max-width: 1050px; }
+.cartoon .friends header { border-bottom: 2px solid var(--ink); padding-bottom: 18px; }
+.cartoon .friends h2 { color: var(--ink); }
+.cartoon .friends .count { margin-left: auto; background: #fff8e6; border: 1px solid var(--ink); border-radius: 20px; padding: 3px 12px; font-size: .8rem; opacity: 1; }
+.cartoon .add-row { margin-top: 22px; }
+.cartoon .chip { color: var(--ink); border: 2px solid var(--ink); background: #fff8e6; }
+.cartoon .chip.on { background: #f7c85a; }
+.cartoon .status { color: #216471; }
+.cartoon .empty { background: #fff8e6; border: 2px dashed #6c9592; border-radius: 24px; grid-column: 1 / -1; padding: 70px 20px; text-align: center; opacity: 1; color: #426764; }
+.cartoon .card { background: #fff8e6; border: 2px solid var(--ink); box-shadow: 0 4px 0 var(--ink); }
+.cartoon .modal { background: #123e467a; backdrop-filter: blur(5px); }
+/* Chromium can tile a backdrop-filter inside a scaled comparison iframe. */
+.cartoon.comparison-embed .modal { backdrop-filter: none; }
+.cartoon .modal h3, .cartoon .modal h2 { color: var(--ink); }
+.cartoon .settings { gap: 12px; }
+.cartoon .seg { border: 2px solid var(--ink); border-radius: 12px; }
+.cartoon .seg button { color: var(--ink); font-size: .85rem; padding: .7em .4em; background: #fffaf0; }
+.cartoon .seg button.on { background: #f7c85a; }
+.cartoon input[type=range] { accent-color: #216471; }
+.cartoon .toggles { border-top: 1px dashed #b7c8b7; padding-top: 12px; }
+.cartoon .result .total { color: #d6604e; }
+.cartoon .board .scores li { border-bottom-color: #b7c8b7; }
+.cartoon .hud-buttons { top: 12px; right: 12px; }
+.art-switch { position: fixed; z-index: 60; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 12px; background: #fff8e6; border: 2px solid #193c43; box-shadow: 0 3px 0 #193c43; font: 12px 'Mitr', sans-serif; }
+.art-switch span { padding: 0 7px; color: #58716d; font-size: 10px; }
+.art-switch a { text-decoration: none; color: #193c43; padding: 5px 10px; border-radius: 7px; }
+.art-switch a[aria-current=page] { background: #f7c85a; }
+@media (max-width: 740px) {
+  .cartoon .home-screen { padding-left: 0; justify-content: center; }
+  .cartoon .hero-sticker { display: none; }
+  .cartoon .home { width: 355px; padding: 22px; gap: 9px; }
+  .cartoon .home h1 { font-size: 2.5rem; }
+}
+@media (max-height: 650px) {
+  .cartoon .home { gap: 7px; padding: 18px 24px; max-height: 89vh; overflow: auto; }
+  .cartoon .home::before { position: static; transform: none; margin: -5px auto 0; font-size: .6rem; }
+  .cartoon .home h1 { font-size: 2.1rem; margin: 0; }
+  .cartoon .home .btn { padding: .35em .8em; }
+  .cartoon .home .btn.big { font-size: 1.2rem; }
+}

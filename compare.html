@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="./favicon.svg" />
+    <title>ยิงเป้าแก๊งเพื่อน · Cartoon art preview</title>
+  </head>
+  <body>
+    <main>
+      <header class="preview-header">
+        <a class="brand" href="./?art=cartoon"><img src="./favicon.svg" alt="" /><span>ยิงเป้าแก๊งเพื่อน<small>CARNIVAL SHOOTER BY LUFFY</small></span></a>
+        <span class="preview-badge">ART DIRECTION / 01</span>
+      </header>
+      <section class="intro">
+        <div><p class="eyebrow">A LITTLE MORE CARNIVAL. A LOT MORE CHARACTER.</p><h1>แก๊งเดิม เพิ่มความการ์ตูน<span>Cartoon blend — a visual concept</span></h1></div>
+        <p class="description">เส้นหมึกคม สีอุ่น และฉากงานวัดแบบภาพวาด<br>ชื่อเดิม ตัวละครเดิม วิธีเล่นเดิม — เปลี่ยนแค่อารมณ์ภาพ</p>
+      </section>
+      <nav class="scenes" aria-label="เลือกหน้าตัวอย่าง">
+        <button data-scene="home" aria-pressed="true">01 <span>หน้าแรก</span></button>
+        <button data-scene="play" aria-pressed="false">02 <span>ในเกม</span></button>
+        <button data-scene="friends" aria-pressed="false">03 <span>แก๊งเพื่อน</span></button>
+        <button data-scene="settings" aria-pressed="false">04 <span>ตั้งค่า</span></button>
+      </nav>
+      <section class="comparison" aria-label="ภาพก่อนและหลัง">
+        <article><div class="frame-heading"><span><i></i> BEFORE <b>ภาพเดิม</b></span><a id="original-link" href="./?art=original" target="_blank" rel="noopener">เปิดเล่น ↗</a></div><div class="viewport"><iframe id="original" title="ภาพเดิมของเกม" src="./?art=original&amp;embed=1"></iframe></div></article>
+        <article class="after"><div class="frame-heading"><span><i></i> AFTER <b>Cartoon blend</b></span><a id="cartoon-link" href="./?art=cartoon" target="_blank" rel="noopener">เปิดเล่น ↗</a></div><div class="viewport"><iframe id="cartoon" title="ตัวอย่างภาพการ์ตูน" src="./?art=cartoon&amp;embed=1"></iframe></div></article>
+      </section>
+      <section class="art-notes"><p><b>01 / INK & PAPER</b><span>เส้นหมึก + ผิวกระดาษ + เงาสติกเกอร์</span></p><p><b>02 / FAIRGROUND PALETTE</b><span>คอรัล · ครีม · เขียวมิ้นต์ · น้ำเงินหมึก</span></p><p><b>03 / SAME PLAYFUL GANG</b><span>ผสมตัวละครเดิมเข้ากับฉากวาดใหม่</span></p></section>
+      <footer><span>PREVIEW ONLY · ไม่ใช่เกมเวอร์ชันจริง · ยังไม่เผยแพร่</span><span>Original name & icon preserved</span></footer>
+      <p class="reference-note">Concept based on the requested cartoon blend; the Facebook reference requires login and could not be viewed.</p>
+    </main>
+    <script type="module" src="/src/compare.ts"></script>
+  </body>
+</html>

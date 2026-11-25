@@ -3,6 +3,7 @@ import { animate, drawPuppet, hitTest, MOVE_ANIMS, STOP_ANIMS, type AnimName, ty
 import { canShoot, comboMult, fire, land, newRound, outcome, speedFor, surge, HITS_TO_WIN, SHOTS_PER_ROUND, type Outcome, type RoundState } from './logic';
 import { say, sfx } from './audio';
 import { canvas, clamp, pick, rand, type Pt } from './util';
+import { cartoonArt, paintCartoonBackdrop, paintCartoonCounter, paintCartoonShelf } from './art';
 
 export const TAUNTS = [
   'แบร่~ ยิงไม่โดนหรอก!',
@@ -446,6 +447,10 @@ export class Game {
     const g = c.getContext('2d')!;
     g.scale(this.dpr, this.dpr);
     const { W, H } = this;
+    if (cartoonArt) {
+      paintCartoonBackdrop(g, W, H, !!this.opts.attract);
+      return c;
+    }
     const sky = g.createLinearGradient(0, 0, 0, H);
     sky.addColorStop(0, '#2a1458');
     sky.addColorStop(1, '#5b2a86');
@@ -508,6 +513,7 @@ export class Game {
   private drawRowShelf(row: Row) {
     const g = this.g;
     const h = this.U * 0.45 * row.scale;
+    if (cartoonArt) return paintCartoonShelf(g, this.W, row.y, h, row.belt);
     g.fillStyle = '#7a4a24';
     g.fillRect(0, row.y, this.W, h);
     g.fillStyle = '#9c6332';
@@ -615,6 +621,7 @@ export class Game {
   private drawCounter() {
     const g = this.g;
     const y = this.counterTop();
+    if (cartoonArt) return paintCartoonCounter(g, this.W, this.H, y, this.U);
     const grd = g.createLinearGradient(0, y, 0, this.H);
     grd.addColorStop(0, '#b5722f');
     grd.addColorStop(1, '#6b3d17');
@@ -628,7 +635,7 @@ export class Game {
 
   private drawLights() {
     const g = this.g;
-    const aw = this.H * 0.11;
+    const aw = this.H * (cartoonArt ? 0.135 : 0.11);
     const n = Math.ceil(this.W / 34);
     for (let i = 0; i <= n; i++) {
       const on = (Math.floor(this.time * 3) + i) % 3 !== 0;
@@ -791,6 +798,16 @@ export class Game {
         g.stroke();
         g.setLineDash([]);
       }
+    }
+    if (cartoonArt) {
+      // The paper backdrop is light: keep the existing white/yellow HUD on ink.
+      g.fillStyle = '#193c43';
+      g.strokeStyle = '#f5c75f';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.roundRect(this.W / 2 - cs * 4.3, y - cs * 1.45, cs * 8.6, cs * (r.combo >= 2 ? 4.3 : 3.25), cs * .7);
+      g.fill();
+      g.stroke();
     }
     g.font = `600 ${Math.round(cs * 1.1)}px ${FONT}`;
     g.fillStyle = '#fff';

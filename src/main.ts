@@ -2,6 +2,8 @@ import '@fontsource/mitr/400.css';
 import '@fontsource/mitr/600.css';
 import '@fontsource/mitr/700.css';
 import './style.css';
+import './cartoon.css';
+import { cartoonArt, inComparison, previewScene } from './art';
 import { builtinCharacters, prepare, type CharacterData, type RuntimeChar } from './character';
 import { buildCharacter, detectFriends, loadImageFile, manualGeom } from './cutout';
 import { deleteFriend, loadFriends, renameFriend, saveFriend } from './store';
@@ -27,10 +29,14 @@ interface Settings {
 }
 
 const SKEY = 'cs.settings.v1';
+document.body.classList.toggle('cartoon', cartoonArt);
+document.body.classList.toggle('comparison-embed', inComparison);
 const PKEY = 'cs.prizes.v1';
 const BKEY = 'cs.best.v1';
 let best: { score: number; level: number } = JSON.parse(localStorage.getItem(BKEY) || '{"score":0,"level":0}');
 const settings: Settings = { control: 'touch', eye: 'right', smooth: 0.6, tiltRange: 18, player: '', sound: true, music: true, voice: true, ...JSON.parse(localStorage.getItem(SKEY) || '{}') };
+// Embedded art comparisons must not request a camera or play two soundtracks.
+if (inComparison) Object.assign(settings, { control: 'touch', sound: false, music: false, voice: false });
 const saveSettings = () => {
   localStorage.setItem(SKEY, JSON.stringify(settings));
   applySettings();
@@ -139,6 +145,21 @@ function home() {
     home();
   });
   screen.querySelector('#settings')!.addEventListener('click', () => (sfx.click(), settingsDialog(home)));
+  if (cartoonArt) {
+    const hero = document.createElement('div');
+    hero.className = 'hero-sticker';
+    hero.setAttribute('aria-hidden', 'true');
+    hero.innerHTML = '<div class="hero-label">แก๊งนี้…<br>มีแต่ตัวตึง!</div><canvas width="500" height="280"></canvas><small>ชวนเพื่อนมาเป็นเป้ากันเถอะ!</small>';
+    screen.appendChild(hero);
+    const ctx = hero.querySelector('canvas')!.getContext('2d')!;
+    for (let i = 0; i < 3; i++) {
+      ctx.save();
+      ctx.translate(100 + i * 150, 260 - (i === 1 ? 18 : 0));
+      ctx.scale(72, 72);
+      drawPuppet(ctx, builtins[i], animate(i === 1 ? 'wave' : 'dance', .3 + i));
+      ctx.restore();
+    }
+  }
 }
 
 // ---------------- friends ----------------
@@ -735,7 +756,29 @@ async function boardDialog() {
     : '<li class="small-note">ยังไม่มีใครส่งคะแนน เป็นคนแรกเลย!</li>';
 }
 
-loadFriends()
-  .then((f) => (friends = f))
-  .catch((e) => console.warn(e))
-  .finally(home);
+// Canvas scenery is cached, so explicitly load the Thai font subset before
+// painting it. DOM text repaints when fonts arrive; a cached canvas does not.
+Promise.all([
+  loadFriends().then((f) => (friends = f)).catch((e) => console.warn(e)),
+  Promise.all([400, 600, 700].map(weight => document.fonts.load(`${weight} 24px "Mitr"`, 'ยิงเป้าแก๊งเพื่อน')))
+    .catch((e) => console.warn(e)),
+])
+  .finally(() => {
+    home();
+    // Preview-only deep links make identical main screens easy to compare.
+    if (previewScene === 'play') void play(1);
+    if (previewScene === 'friends') friendsScreen();
+    if (previewScene === 'settings') settingsDialog(home);
+    if (!inComparison) {
+      const nav = document.createElement('nav');
+      nav.className = 'art-switch';
+      nav.setAttribute('aria-label', 'เปรียบเทียบภาพตัวอย่าง');
+      const url = (art: string) => {
+        const p = new URLSearchParams(location.search);
+        p.set('art', art);
+        return `?${p}`;
+      };
+      nav.innerHTML = `<span>ART PREVIEW</span><a href="${url('original')}" ${!cartoonArt ? 'aria-current="page"' : ''}>ภาพเดิม</a><a href="${url('cartoon')}" ${cartoonArt ? 'aria-current="page"' : ''}>การ์ตูน</a><a href="./compare.html">เทียบคู่ ↗</a>`;
+      document.body.appendChild(nav);
+    }
+  });
