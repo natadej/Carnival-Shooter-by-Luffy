@@ -755,9 +755,13 @@ async function boardDialog() {
     : '<li class="small-note">ยังไม่มีใครส่งคะแนน เป็นคนแรกเลย!</li>';
 }
 
-loadFriends()
-  .then((f) => (friends = f))
-  .catch((e) => console.warn(e))
+// Canvas scenery is cached, so explicitly load the Thai font subset before
+// painting it. DOM text repaints when fonts arrive; a cached canvas does not.
+Promise.all([
+  loadFriends().then((f) => (friends = f)).catch((e) => console.warn(e)),
+  Promise.all([400, 600, 700].map(weight => document.fonts.load(`${weight} 24px "Mitr"`, 'ยิงเป้าแก๊งเพื่อน')))
+    .catch((e) => console.warn(e)),
+])
   .finally(() => {
     home();
     // Preview-only deep links make identical main screens easy to compare.
