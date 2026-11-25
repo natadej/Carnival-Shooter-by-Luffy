@@ -3,6 +3,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: './',
+  build: { rollupOptions: { input: { game: 'index.html', compare: 'compare.html' } } },
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
